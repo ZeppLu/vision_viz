@@ -10,6 +10,7 @@ project(vision_viz)
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   image_transport
+  message_filters
   roscpp
   sensor_msgs
   std_msgs
@@ -207,3 +208,6 @@ include_directories(
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
+
+add_executable(detections_viz src/detections_viz.cpp)
+target_link_libraries(detections_viz ${catkin_LIBRARIES})
