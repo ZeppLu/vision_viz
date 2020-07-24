@@ -45,18 +45,26 @@ void draw_bboxes(const ros::Duration& max_delay) {
 	//rendered.is_bigendian	= image.is_bigendian;
 	//rendered.step			= image.step;
 	//rendered.data			= image.data;
-	rendered = image;
+	cv_bridge::CvImagePtr cv_ptr;
+	try {
+		cv_ptr = cv_bridge::toCvCopy(image, image.encoding);
+	} catch (cv_bridge::Exception& e) {
+		ROS_ERROR("cv_bridge exception: %s", e.what());
+		return;
+	}
 	last_image_stamp = image.header.stamp;
 
 	// check delay between detections result & source image
 	ros::Duration delay = detections.header.stamp - image.header.stamp;
 	if (delay <= ros::Duration(0.0) || delay > max_delay) {
-		ROS_INFO("no up-to-date detection for this frame");
+		ROS_INFO("no up-to-date detection for this frame (delay: %u.%u)", delay.sec, delay.nsec);
 		return;
 	}
 
 	// draw bounding boxes
 	ROS_INFO("going to draw bounding boxes");
+	//
+	cv_ptr->toImageMsg(rendered);
 	last_detections_stamp = detections.header.stamp;
 }
 
