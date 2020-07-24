@@ -1,0 +1,8 @@
+<launch>
+  <node name="detections_viz" pkg="vision_viz" type="detections_viz" output="screen">
+    <remap from="/detections_viz/image_in/compressed" to="/jetbot_camera/raw/compressed"/>
+    <remap from="/detections_viz/detections" to="/detectnet/detections"/>
+    <param name="max_delay_ms" value="300"/>
+    <param name="hz" value="30.0"/>
+  </node>
+</launch>
