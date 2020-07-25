@@ -14,10 +14,85 @@
 #include <message_filters/sync_policies/approximate_time.h>
 
 
-void callback(const sensor_msgs::ImageConstPtr& image_in, const vision_msgs::Detection2DArrayConstPtr& detections, image_transport::Publisher& image_pub) {
-	ROS_INFO("received a pair");
-	sensor_msgs::Image msg;
-	image_pub.publish(msg);
+// global variable storing class descriptions
+std::vector<std::string> class_descs = {};
+
+
+// almost directly copid from jetson-inference/c/detectNet.cpp
+cv::Scalar generate_color(uint32_t class_id) {
+	// the first color is black, skip that one
+	class_id += 1;
+
+	// https://github.com/dusty-nv/pytorch-segmentation/blob/16882772bc767511d892d134918722011d1ea771/datasets/sun_remap.py#L90
+#define bitget(byteval, idx)    ((byteval & (1 << idx)) != 0)
+
+	int r = 0;
+	int g = 0;
+	int b = 0;
+	int c = class_id;
+
+	for (int j=0; j<8; j++ ) {
+		r = r | (bitget(c, 0) << 7 - j);
+		g = g | (bitget(c, 1) << 7 - j);
+		b = b | (bitget(c, 2) << 7 - j);
+		c = c >> 3;
+	}
+
+	return cv::Scalar(b, g, r);
+}
+
+
+void callback(
+		const sensor_msgs::ImageConstPtr& p_image,
+		const vision_msgs::Detection2DArrayConstPtr& p_detections,
+		const image_transport::Publisher& image_pub,
+		int line_thickness, int font_thickness, double font_scale
+		) {
+
+	ros::Duration delay = p_detections->header.stamp - p_image->header.stamp;
+	ROS_INFO_STREAM("received a pair, delay: " << delay);
+
+	// initialize cv_bridge pointer
+	cv_bridge::CvImagePtr cv_ptr;
+	try {
+		cv_ptr = cv_bridge::toCvCopy(*p_image, p_image->encoding);
+	} catch (cv_bridge::Exception& e) {
+		ROS_ERROR("cv_bridge exception: %s", e.what());
+	}
+
+	// actual drawing stuff
+	for (const vision_msgs::Detection2D& detection : p_detections->detections) {
+		const vision_msgs::BoundingBox2D& bbox = detection.bbox;
+		// detection.results.size() is guaranteed to be 1 (learnt from detectnet source code)
+		const vision_msgs::ObjectHypothesisWithPose& hyp = detection.results[0];
+
+		cv::Scalar color = generate_color(hyp.id);
+
+		// draw bounding box
+		cv::Point upper_left(bbox.center.x - bbox.size_x/2, bbox.center.y - bbox.size_y/2);
+		cv::Point lower_right(bbox.center.x + bbox.size_x/2, bbox.center.y + bbox.size_y/2);
+		cv::rectangle(cv_ptr->image, upper_left, lower_right, color, line_thickness);
+
+		// draw class description (at upper left corner of bbox)
+		// TODO: sometime text_org is too close to upper border
+		cv::Point text_org = upper_left - cv::Point(line_thickness, line_thickness);
+		std::string desc = class_descs.size() ? class_descs[hyp.id] : "";
+		cv::putText(cv_ptr->image, desc, text_org, cv::FONT_HERSHEY_SIMPLEX, font_scale, color, font_thickness);
+	}
+
+	// publish rendered image
+	sensor_msgs::ImagePtr p_rendered = cv_ptr->toImageMsg();
+	p_rendered->header.stamp = ros::Time::now();
+	image_pub.publish(p_rendered);
+}
+
+
+// callback used to get class descriptions
+void class_descs_callback(const vision_msgs::VisionInfoConstPtr& p_info) {
+	const std::string& db = p_info->database_location;
+	if (!ros::NodeHandle().getParam(db, class_descs)) {
+		ROS_ERROR("failed to obtain class descriptions from %s", db.c_str());
+	}
 }
 
 
@@ -42,10 +117,20 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 
+	// parameters used in drawing bboxes
+	int line_thickness = 3, font_thickness = 2;
+	double font_scale = 1.0;
+	private_nh.param("line_thickness", line_thickness, line_thickness);
+	private_nh.param("font_thickness", font_thickness, font_thickness);
+	private_nh.param("font_scale", font_scale, font_scale);
+
 	// subscribe to compressed image
 	// XXX: this step is necessary, or subscribed topic is default to `raw',
 	// which greatly consumes bandwidth
 	private_nh.setParam("image_transport", "compressed");
+
+	// try to get vision info, spin once to see if received
+	ros::Subscriber vision_info_sub = private_nh.subscribe("vision_info", 1, class_descs_callback);
 
 	// rendered images publisher
 	image_transport::Publisher image_pub = it.advertise("image_out", 1);
@@ -58,13 +143,14 @@ int main(int argc, char** argv) {
 	image_transport::SubscriberFilter image_sub(it, "image_in", 1);
 	message_filters::Subscriber<vision_msgs::Detection2DArray> detect_sub(private_nh, "detections", 1);
 
+	// see http://wiki.ros.org/message_filters/ApproximateTime for details
 	typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, vision_msgs::Detection2DArray> SyncPol;
 	// queue_size = 10
 	message_filters::Synchronizer<SyncPol> sync(SyncPol(10), image_sub, detect_sub);
-	// 1ms == 1000000ns
-	sync.setInterMessageLowerBound(ros::Duration(0, detect_delay_lb_ms * 1000000));
+	// 1s == 1000ms
+	sync.setInterMessageLowerBound(ros::Duration(detect_delay_lb_ms / 1000.0));
 	sync.setAgePenalty(age_penalty);
-	sync.registerCallback(boost::bind(&callback, _1, _2, image_pub));
+	sync.registerCallback(boost::bind(&callback, _1, _2, image_pub, line_thickness, font_thickness, font_scale));
 
 	ros::spin();
 
