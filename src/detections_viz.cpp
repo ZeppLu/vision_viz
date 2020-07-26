@@ -42,7 +42,7 @@ cv::Scalar generate_color(uint32_t class_id) {
 }
 
 
-void callback(
+void render_and_publish(
 		const sensor_msgs::ImageConstPtr& p_image,
 		const vision_msgs::Detection2DArrayConstPtr& p_detections,
 		const image_transport::Publisher& image_pub,
@@ -88,7 +88,7 @@ void callback(
 
 
 // callback used to get class descriptions
-void class_descs_callback(const vision_msgs::VisionInfoConstPtr& p_info) {
+void fetch_class_descs(const vision_msgs::VisionInfoConstPtr& p_info) {
 	const std::string& db = p_info->database_location;
 	if (!ros::NodeHandle().getParam(db, class_descs)) {
 		ROS_ERROR("failed to obtain class descriptions from %s", db.c_str());
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
 	private_nh.setParam("image_transport", "compressed");
 
 	// try to get vision info, spin once to see if received
-	ros::Subscriber vision_info_sub = private_nh.subscribe("vision_info", 1, class_descs_callback);
+	ros::Subscriber vision_info_sub = private_nh.subscribe("vision_info", 1, fetch_class_descs);
 
 	// rendered images publisher
 	image_transport::Publisher image_pub = it.advertise("image_out", 1);
@@ -150,7 +150,8 @@ int main(int argc, char** argv) {
 	// 1s == 1000ms
 	sync.setInterMessageLowerBound(ros::Duration(detect_delay_lb_ms / 1000.0));
 	sync.setAgePenalty(age_penalty);
-	sync.registerCallback(boost::bind(&callback, _1, _2, image_pub, line_thickness, font_thickness, font_scale));
+	// take const reference of `image_pub' to avoid copying
+	sync.registerCallback(boost::bind(&render_and_publish, _1, _2, boost::cref(image_pub), line_thickness, font_thickness, font_scale));
 
 	ros::spin();
 
