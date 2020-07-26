@@ -15,7 +15,8 @@
 
 
 // global variable storing class descriptions
-std::vector<std::string> class_descs = {};
+// to avoid usage of global variables, boost::ref()/cref() is utilized in boost::bind()
+//std::vector<std::string> class_descs = {};
 
 
 // almost directly copid from jetson-inference/c/detectNet.cpp
@@ -46,6 +47,7 @@ void render_and_publish(
 		const sensor_msgs::ImageConstPtr& p_image,
 		const vision_msgs::Detection2DArrayConstPtr& p_detections,
 		const image_transport::Publisher& image_pub,
+		const std::vector<std::string>& class_descs,
 		int line_thickness, int font_thickness, double font_scale
 		) {
 
@@ -88,12 +90,13 @@ void render_and_publish(
 
 
 // callback used to get class descriptions
-void fetch_class_descs(const vision_msgs::VisionInfoConstPtr& p_info) {
+void fetch_class_descs(const vision_msgs::VisionInfoConstPtr& p_info, std::vector<std::string>& class_descs) {
 	const std::string& db = p_info->database_location;
 	if (!ros::NodeHandle().getParam(db, class_descs)) {
 		ROS_ERROR("failed to obtain class descriptions from %s", db.c_str());
 	}
 }
+
 
 
 int main(int argc, char** argv) {
@@ -102,6 +105,9 @@ int main(int argc, char** argv) {
 	ros::NodeHandle nh;
 	ros::NodeHandle private_nh("~");
 	image_transport::ImageTransport it(private_nh);
+
+	std::vector<std::string> class_descs = {};
+
 
 	// parameters used to help messages matching faster
 	// see http://wiki.ros.org/message_filters/ApproximateTime for details
@@ -117,6 +123,7 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 
+
 	// parameters used in drawing bboxes
 	int line_thickness = 3, font_thickness = 2;
 	double font_scale = 1.0;
@@ -124,16 +131,23 @@ int main(int argc, char** argv) {
 	private_nh.param("font_thickness", font_thickness, font_thickness);
 	private_nh.param("font_scale", font_scale, font_scale);
 
+
 	// subscribe to compressed image
 	// XXX: this step is necessary, or subscribed topic is default to `raw',
 	// which greatly consumes bandwidth
 	private_nh.setParam("image_transport", "compressed");
 
+
 	// try to get vision info, spin once to see if received
-	ros::Subscriber vision_info_sub = private_nh.subscribe("vision_info", 1, fetch_class_descs);
+	ros::Subscriber vision_info_sub = private_nh.subscribe<vision_msgs::VisionInfo>(
+			"vision_info",
+			1,
+			boost::bind(&fetch_class_descs, _1, boost::ref(class_descs)));
+
 
 	// rendered images publisher
 	image_transport::Publisher image_pub = it.advertise("image_out", 1);
+
 
 	// subscribers for camera captures & detections output from jetson nano
 	// use message_filters to match messages from different topics by timestamps,
@@ -151,7 +165,9 @@ int main(int argc, char** argv) {
 	sync.setInterMessageLowerBound(ros::Duration(detect_delay_lb_ms / 1000.0));
 	sync.setAgePenalty(age_penalty);
 	// take const reference of `image_pub' to avoid copying
-	sync.registerCallback(boost::bind(&render_and_publish, _1, _2, boost::cref(image_pub), line_thickness, font_thickness, font_scale));
+	sync.registerCallback(
+			boost::bind(&render_and_publish, _1, _2, boost::cref(image_pub), boost::cref(class_descs), line_thickness, font_thickness, font_scale));
+
 
 	ros::spin();
 
