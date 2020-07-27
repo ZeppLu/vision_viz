@@ -1,3 +1,25 @@
+# 配置小车环境
+
+### 开启高性能模式
+将小车的工作功耗切换到 10W（使用四个 CPU 核），此命令只需运行一次：
+```shell
+sudo nvpmodel -m 0
+```
+使用命令 `nvpmodel -q` 来确认小车是否已切换到 MAXN 模式。切换完成后应该不会再变回去了，可以重启一次确认一下。
+
+### 设置时间以及时区
+
+因为运行在小车上的 ROS 结点会附带时间戳信息，配置好小车的时间有利于测试延迟，以及按照时间来正确匹配图像帧与神经网络的输出。
+```shell
+sudo apt install ntp
+sudo vim /etc/ntp.conf  # 此处建议按照 https://tuna.moe/help/ntp/ 修改，以方便国内使用
+sudo systemctl restart ntp
+sudo timedatectl set-timezone Asia/Shanghai
+date  # 确认输出的时间日期是否正确
+```
+
+------
+
 # 安装依赖
 
 ### 在小车上
@@ -17,14 +39,7 @@ sudo apt install ros-melodic-image-transport ros-melodic-compressed-image-transp
 # 运行
 
 ### 在小车上
-
-将小车的工作模式切换到 10W（使用四个 CPU 核），此命令只需运行一次：
-```shell
-sudo nvpmodel -m 0
-```
-使用命令 `nvpmodel -q` 来确认小车是否已切换到 MAXN 模式。
-
-然后打开三个 ssh 窗口，分别运行（以 ssd-mobilenet-v2 为例，其他模型未测试）：
+打开三个 ssh 窗口，分别运行（以 ssd-mobilenet-v2 为例，其他模型未测试）：
 ```shell
 roscore
 ```
