@@ -6,6 +6,9 @@
     <remap from="/detections_viz/detections" to="/detectnet/detections"/>
     <remap from="/detections_viz/vision_info" to="/detectnet/vision_info"/>
 
+    <param name="line_thickness" value="2"/>
+    <param name="font_thickness" value="1"/>
+    <param name="font_scale" value="0.5"/>
     <param name="detect_delay_lb_ms" value="0"/>
     <param name="age_penalty" value="1.0"/>
   </node>

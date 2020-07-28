@@ -14,11 +14,6 @@
 #include <message_filters/sync_policies/approximate_time.h>
 
 
-// global variable storing class descriptions
-// to avoid usage of global variables, boost::ref()/cref() is utilized in boost::bind()
-//std::vector<std::string> class_descs = {};
-
-
 // almost directly copid from jetson-inference/c/detectNet.cpp
 cv::Scalar generate_color(uint32_t class_id) {
 	// the first color is black, skip that one
@@ -43,6 +38,35 @@ cv::Scalar generate_color(uint32_t class_id) {
 }
 
 
+void draw_bbox(
+		cv::Mat& img,
+		const vision_msgs::BoundingBox2D& bbox,
+		const std::string& label,
+		const cv::Scalar& color,
+		int line_thickness, int font_thickness, double font_scale
+		) {
+
+	// draw bounding box
+	cv::Point upper_left(bbox.center.x - bbox.size_x/2, bbox.center.y - bbox.size_y/2);
+	cv::Point lower_right(bbox.center.x + bbox.size_x/2, bbox.center.y + bbox.size_y/2);
+	cv::rectangle(img, upper_left, lower_right, color, line_thickness);
+
+	// get the size of label text
+	int baseline;
+	cv::Size label_size = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, font_scale, font_thickness, &baseline);
+	// baseline == y-coordinate of the baseline relative to the bottom-most text point
+	label_size += cv::Size(0, baseline);
+
+	// draw background of label text
+	lower_right = upper_left + cv::Point(label_size);
+	cv::rectangle(img, upper_left, lower_right, color, -1);
+
+	// draw class description in white (at upper left corner of bbox)
+	cv::Point text_org = upper_left + cv::Point(0, label_size.height-baseline);
+	cv::putText(img, label, text_org, cv::FONT_HERSHEY_SIMPLEX, font_scale, cv::Scalar(255, 255, 255), font_thickness);
+}
+
+
 void render_and_publish(
 		const sensor_msgs::ImageConstPtr& p_image,
 		const vision_msgs::Detection2DArrayConstPtr& p_detections,
@@ -63,23 +87,21 @@ void render_and_publish(
 	}
 
 	// actual drawing stuff
-	for (const vision_msgs::Detection2D& detection : p_detections->detections) {
+	for (const auto& detection : p_detections->detections) {
 		const vision_msgs::BoundingBox2D& bbox = detection.bbox;
 		// detection.results.size() is guaranteed to be 1 (learnt from detectnet source code)
 		const vision_msgs::ObjectHypothesisWithPose& hyp = detection.results[0];
 
+		// use different colors for different classes
 		cv::Scalar color = generate_color(hyp.id);
 
-		// draw bounding box
-		cv::Point upper_left(bbox.center.x - bbox.size_x/2, bbox.center.y - bbox.size_y/2);
-		cv::Point lower_right(bbox.center.x + bbox.size_x/2, bbox.center.y + bbox.size_y/2);
-		cv::rectangle(cv_ptr->image, upper_left, lower_right, color, line_thickness);
-
-		// draw class description (at upper left corner of bbox)
-		// TODO: sometime text_org is too close to upper border
-		cv::Point text_org = upper_left - cv::Point(line_thickness, line_thickness);
+		// construct label of bbox
 		std::string desc = class_descs.size() ? class_descs[hyp.id] : "";
-		cv::putText(cv_ptr->image, desc, text_org, cv::FONT_HERSHEY_SIMPLEX, font_scale, color, font_thickness);
+		std::stringstream label_stream;
+		label_stream << desc << std::setprecision(2) << " (" << hyp.score << ")";
+
+		// draw bounding box and label
+		draw_bbox(cv_ptr->image, bbox, label_stream.str(), color, line_thickness, font_thickness, font_scale);
 	}
 
 	// publish rendered image
@@ -125,7 +147,7 @@ int main(int argc, char** argv) {
 
 
 	// parameters used in drawing bboxes
-	int line_thickness = 3, font_thickness = 2;
+	int line_thickness = 1, font_thickness = 1;
 	double font_scale = 1.0;
 	private_nh.param("line_thickness", line_thickness, line_thickness);
 	private_nh.param("font_thickness", font_thickness, font_thickness);
