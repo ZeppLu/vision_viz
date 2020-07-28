@@ -44,7 +44,7 @@ sudo apt install ros-melodic-image-transport ros-melodic-compressed-image-transp
 roscore
 ```
 ```shell
-rosrun jetbot_ros jetbot_camera _width:=1280 _height:=720 _framerate:=30.0
+rosrun jetbot_ros jetbot_camera _width:=640 _height:=360 _framerate:=30.0
 ```
 ```shell
 rosrun ros_deep_learning detectnet /detectnet/image_in:=/jetbot_camera/raw _model_name:=ssd-mobilenet-v2
@@ -55,4 +55,4 @@ rosrun ros_deep_learning detectnet /detectnet/image_in:=/jetbot_camera/raw _mode
 roslaunch vision_viz detections_viz.launch
 ```
 
-图片源为 720p 30fps 时，网络大约能以 14fps 的速率输出检测结果（用命令 `rostopic hz /detectnet/detections` 可查看输出速率）。尝试修改 `jetbot_camera` 启动参数也许能提高速率。
+图片源为 360p 30fps 时，网络大约能以 20fps 的速率输出检测结果（用命令 `rostopic hz /detectnet/detections` 可查看输出速率）。修改 `jetbot_camera` 启动参数可改变摄像头输出的分辨率与帧率，输出 720p 30fps 时，物体检测的速率降至约 15fps，同时电脑上的可视化窗口隔一段时间会卡一下，尤其是画面变动剧烈时，推测是网络问题导致的。
