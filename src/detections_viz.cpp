@@ -154,12 +154,6 @@ int main(int argc, char** argv) {
 	private_nh.param("font_scale", font_scale, font_scale);
 
 
-	// subscribe to compressed image
-	// XXX: this step is necessary, or subscribed topic is default to `raw',
-	// which greatly consumes bandwidth
-	private_nh.setParam("image_transport", "compressed");
-
-
 	// try to get vision info, spin once to see if received
 	ros::Subscriber vision_info_sub = private_nh.subscribe<vision_msgs::VisionInfo>(
 			"vision_info",

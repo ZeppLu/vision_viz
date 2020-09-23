@@ -6,6 +6,8 @@
     <remap from="/detections_viz/detections" to="/detectnet/detections"/>
     <remap from="/detections_viz/vision_info" to="/detectnet/vision_info"/>
 
+	<param name="image_transport" value="compressed"/>
+
     <param name="line_thickness" value="2"/>
     <param name="font_thickness" value="1"/>
     <param name="font_scale" value="0.5"/>
