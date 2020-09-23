@@ -2,7 +2,7 @@
 
 
   <node name="detections_viz" pkg="vision_viz" type="detections_viz" output="screen">
-    <remap from="/detections_viz/image_in/compressed" to="/jetbot_camera/raw/compressed"/>
+    <remap from="/detections_viz/image_in/compressed" to="/camera/color/image_raw/compressed"/>
     <remap from="/detections_viz/detections" to="/detectnet/detections"/>
     <remap from="/detections_viz/vision_info" to="/detectnet/vision_info"/>
 
@@ -16,6 +16,6 @@
   </node>
 
 
-  <node name="viewer" pkg="rqt_image_view" type="rqt_image_view" args="/detections_viz/image_out" output="screen"/>
+  <node name="viewer" pkg="rqt_image_view" type="rqt_image_view" args="/detections_viz/image_out" output="screen" required="true"/>
 
 </launch>
